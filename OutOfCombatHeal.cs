@@ -11,7 +11,7 @@ using UnityEngine;
 namespace Oxide.Plugins
 {
     [Info("Out Of Combat Heal", "VisEntities", "1.0.0")]
-    [Description(" ")]
+    [Description("Restores player health gradually after a few minutes without taking damage.")]
     public class OutOfCombatHeal : RustPlugin
     {
         #region Fields

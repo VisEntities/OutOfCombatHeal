@@ -5,15 +5,23 @@
  */
 
 using Newtonsoft.Json;
+using Oxide.Core.Plugins;
 using System.Collections.Generic;
 using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Out Of Combat Heal", "VisEntities", "1.0.0")]
+    [Info("Out Of Combat Heal", "VisEntities", "1.1.0")]
     [Description("Restores player health gradually after a few minutes without taking damage.")]
     public class OutOfCombatHeal : RustPlugin
     {
+        #region 3rd Party Dependencies
+
+        [PluginReference]
+        private readonly Plugin BetterNoEscape;
+
+        #endregion 3rd Party Dependencies
+
         #region Fields
 
         private static OutOfCombatHeal _plugin;
@@ -37,6 +45,9 @@ namespace Oxide.Plugins
 
             [JsonProperty("Health Restored Per Healing Tick")]
             public float HealthRestoredPerHealingTick { get; set; }
+
+            [JsonProperty("Pause Healing If Combat Blocked (Better No Escape)")]
+            public bool PauseHealingIfCombatBlocked { get; set; } = true;
         }
 
         protected override void LoadConfig()
@@ -69,6 +80,11 @@ namespace Oxide.Plugins
             if (string.Compare(_config.Version, "1.0.0") < 0)
                 _config = defaultConfig;
 
+            if (string.Compare(_config.Version, "1.1.0") < 0)
+            {
+                _config.PauseHealingIfCombatBlocked = defaultConfig.PauseHealingIfCombatBlocked;
+            }
+
             PrintWarning("Config update complete! Updated from version " + _config.Version + " to " + Version.ToString());
             _config.Version = Version.ToString();
         }
@@ -80,7 +96,8 @@ namespace Oxide.Plugins
                 Version = Version.ToString(),
                 TimeOutOfCombatBeforeHealingSeconds = 300f,
                 TimeGapBetweenHealingTicksSeconds = 10f,
-                HealthRestoredPerHealingTick = 10f
+                HealthRestoredPerHealingTick = 10f,
+                PauseHealingIfCombatBlocked = false
             };
         }
 
@@ -142,7 +159,7 @@ namespace Oxide.Plugins
 
         #endregion Oxide Hooks
 
-        #region Healer
+        #region Heal Component
 
         public class HealComponent : FacepunchBehaviour
         {
@@ -207,6 +224,9 @@ namespace Oxide.Plugins
 
             private void TickHealing()
             {
+                if (_config.PauseHealingIfCombatBlocked && BetterNoEscapeUtil.IsCombatBlocked(Player))
+                    return;
+
                 float timeSinceLastDamage = GetCurrentTime() - LastDamageTime;
 
                 if (timeSinceLastDamage >= _config.TimeOutOfCombatBeforeHealingSeconds)
@@ -230,7 +250,32 @@ namespace Oxide.Plugins
             }
         }
 
-        #endregion Healer
+        #endregion  Heal Component
+
+        #region 3rd Party Integration
+
+        public static class BetterNoEscapeUtil
+        {
+            private static bool Loaded
+            {
+                get
+                {
+                    return _plugin != null &&
+                           _plugin.BetterNoEscape != null &&
+                           _plugin.BetterNoEscape.IsLoaded;
+                }
+            }
+
+            public static bool IsCombatBlocked(BasePlayer player)
+            {
+                if (!Loaded || player == null)
+                    return false;
+
+                return _plugin.BetterNoEscape.Call<bool>("API_IsCombatBlocked", player);
+            }
+        }
+
+        #endregion 3rd Party Integration
 
         #region Permissions
 
